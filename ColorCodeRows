@@ -1,0 +1,72 @@
+Sub ColorCodeRows()
+' Colour-codes each row a range of data alternating between colors given by constants (colorIndex_1 and colorIndex_2)
+' The row colour changes whenever the value in the specified row (given by colRef, retrieved from user) changes
+ 
+    ' Constants for color
+    Const colorIndex_1 As Long = 15917529
+    Const colorIndex_2 As Long = 15189684
+ 
+    ' Get column to color-code on and validate user input
+    Dim colRef As String
+    colRef = InputBox("Enter letter reference of column to color-code on (e.g. 'C', 'AB').", Default:="A")
+    If colRef = "" Then
+        Exit Sub
+    ElseIf Not IsAlpha(colRef) Then
+        MsgBox ("Error - expecting alphabetical input.")
+        Exit Sub
+    ElseIf Len(colRef) > 3 Then
+        MsgBox ("Error - expecting column reference with maximum of 3 characters.")
+    End If
+   
+    ' Get worksheet and range (use selection if more than 2 rows, otherwise use UsedRange of active worksheet)
+    Dim sht As Worksheet
+    Set sht = ActiveSheet
+    Dim rng As Range
+    If Selection.Rows.count > 2 Then
+        Set rng = Selection
+    Else
+        Set rng = sht.UsedRange
+    End If
+   
+    ' Columns to color-code between
+    Dim startCol As String, stopCol As String
+    startCol = Split(sht.UsedRange.Address, "$")(1)
+    stopCol = Split(sht.UsedRange.Address, "$")(3)
+   
+    ' Whether to skip first row (in case headers used)
+    Dim skipFirstRow As Boolean
+    If MsgBox("Skip first row?", vbYesNo) = vbYes Then skipFirstRow = True
+   
+    ' Set initial colour index
+    Dim colorIndex_Active As Long
+    colorIndex_Active = colorIndex_1
+   
+    ' Set start previous value
+    Dim prevValue As String
+    prevValue = sht.Range(colRef & rng.Rows(1).row).Value
+   
+    ' For each row in selection
+    Dim r As Object
+    For Each r In rng.Rows
+        ' Skip first row if required
+        If r.row <> rng.Rows(1).row Or skipFirstRow = False Then
+           
+            ' Change color if index value doesn't match previous
+            If sht.Range(colRef & r.row).Value <> prevValue Then
+                If colorIndex_Active = colorIndex_1 Then
+                    colorIndex_Active = colorIndex_2
+                Else
+                    colorIndex_Active = colorIndex_1
+                End If
+            End If
+           
+            ' Store new previous value for comparison on next loop
+            prevValue = sht.Range(colRef & r.row).Value
+           
+            ' Color row
+            sht.Range(startCol & r.row & ":" & stopCol & r.row).Interior.Color = colorIndex_Active
+           
+        End If
+    Next r
+   
+End Sub
