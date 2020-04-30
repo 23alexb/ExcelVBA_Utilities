@@ -1,0 +1,106 @@
+Sub ConvertRangeToText()
+' For each cell in a selected range, converts the values to text
+' (Used for converting cells with existing values as changing the format in the ribbon doesn't always successfully change the format type of the cell value)
+   
+    Call ConvertCellFormat(Selection, "text")
+ 
+End Sub
+ 
+Sub ConvertRangeToDate()
+' For each cell in a selected range, converts the values to a date
+' (Used for converting cells with existing values as changing the format in the ribbon doesn't always successfully change the format type of the cell value)
+ 
+    Call ConvertCellFormat(Selection, "date", ignoreBlank:=True)
+ 
+End Sub
+ 
+Sub ConvertRangeToInteger()
+' For each cell in a selected range, converts the values to an integer
+' (Used for converting cells with existing values as changing the format in the ribbon doesn't always successfully change the format type of the cell value)
+ 
+    Call ConvertCellFormat(Selection, "integer")
+ 
+End Sub
+ 
+Sub ConvertRangeToDecimal()
+' For each cell in a selected range, converts the values to a decimal number
+' (Used for converting cells with existing values as changing the format in the ribbon doesn't always successfully change the format type of the cell value)
+ 
+    Call ConvertCellFormat(Selection, "decimal number")
+ 
+End Sub
+ 
+Function ConvertCellFormat(userSelection As Range, convertTo As String, Optional ignoreBlank As Boolean = True)
+' userSelection is the range of cells to convert
+' convertTo is the type to convert the cell values to ("text", "date", "integer", "decimal number")
+' Set ignoreBlank to True to ignore missing values, False to convert them to default (1899/12/30 for date, 0 for numeric)
+ 
+    ' Get permission from user (in case of accidental button press)
+    If MsgBox("Convert range " & Selection.Address & " to " & convertTo & "?", vbYesNo) = vbNo Then Exit Function
+   
+    ' Initialize error message (to return cell addresses of cells where conversion unsuccessful)
+    Dim errStr As String
+    errStr = "There was an error converting the following cells to " & convertTo & ":" & vbCrLf
+   
+    ' Change value of each cell
+    Dim cell As Range
+    For Each cell In Selection.Cells
+        If Not Convert_EachCell(cell, convertTo, ignoreBlank) Then errStr = errStr & vbCrLf & " - " & cell.Address
+    Next cell
+   
+    ' If error exists, return error message
+    If errStr <> "There was an error converting the following cells to " & convertTo & ":" & vbCrLf Then MsgBox (errStr)
+ 
+End Function
+ 
+Function Convert_EachCell(cell As Range, convertTo As String, Optional ignoreBlank As Boolean = True) As Boolean
+' Converts the type of cell (including the cell value) to text
+' Returns True if successful, False if not
+ 
+    On Error GoTo ErrHandler
+   
+    ' Constants for formatting (change as preferred)
+    Const dateFormat As String = "yyyy/mm/dd"
+    Const numberFormat_decimal As String = "#0.00"
+    Const numberFormat_integer As String = "#0"
+    Dim val As Variant
+   
+    ' Get current empty/occupied status of cell
+    Dim cellIsBlank As Boolean
+    If CStr(cell.Value) = "" Then
+        cellIsBlank = True
+    Else
+        cellIsBlank = False
+    End If
+   
+    ' Text format
+    If convertTo = "text" Then
+        val = CStr(cell.Value)
+        cell.numberFormat = "@"
+       
+    ' Date format
+    ElseIf convertTo = "date" Then
+        val = CDate(cell.Value)
+        cell.numberFormat = dateFormat
+       
+    ' Number format (integer)
+    ElseIf convertTo = "integer" Then
+        val = CLng(cell.Value)
+        cell.numberFormat = numberFormat_integer
+       
+    ' Number format (decimal)
+    ElseIf convertTo = "decimal number" Then
+        val = CDbl(cell.Value)
+        cell.numberFormat = numberFormat_decimal
+    End If
+   
+    ' For blank values, ignore if specified (otherwise populate with previous value)
+    If Not ignoreBlank Or Not cellIsBlank Then cell.Value = val
+   
+    Convert_EachCell = True
+   
+    Exit Function
+ErrHandler:
+    Convert_EachCell = False
+ 
+End Function
