@@ -11,3 +11,10 @@ Macros:
    - Types are text, date, integer, or decimal
    - Used in instances where formatting options in the ribbon fail to convert the 
      underlying cell value when the format is changed
+ - DataIn_DataOut:
+   - Macro to add VLOOKUP formulas to "merge" data between a data table and a source 
+     range with a shared key
+   - Macros to copy a column of keys, adding a prefix and suffix, that can be pasted
+     into the WHERE (or other) clause of a SQL query
+   - Used to copy a set of keys into a query, then merge the query output back into
+     the source worksheet
