@@ -1,0 +1,184 @@
+Option Explicit
+ 
+Sub AddVLookups()
+' This procedure adds columns and VLOOKUP formulas to an output range to add data from a source table based on a key common to both
+' Useful for merging a new data extract with existing data on a shared key
+'    - User selects key column in source table
+'    - User selects key column in output worksheet
+'    - Macro adds VLOOKUP formulas from the first empty column of the output worksheet to add headers and data from each column that
+'      is to the right of the key column in the source table
+'    - Macro selects outputted data so user can easily copy and paste-as-values if desired
+' On error, displays generic message and prints error details to immediate window
+ 
+    ' Change the following 3 constants based on parameters (if these parameters regularly changed, these can be built into an
+    ' input box or userform, but they are usually the same for my use cases so I've kept them as constants to avoid the
+    ' hassle of selecting them every time)
+    Const row_header As Long = 1 ' Row of column headers (assumed to be the same for both worksheets)
+    Const row_start As Long = 2 ' Row at which data begins (assumed to be the same for both worksheets)
+    Const iferror_value As String = "" ' Value used in the formula if the lookup value is not found in the lookup table
+   
+    On Error GoTo ErrHandler
+ 
+    ' Get source and destination key cells from user and validate
+    Dim cell_table As Range, cell_dest As Range
+    Set cell_table = Application.InputBox("Select any cell in the key column of the source table.", Type:=8)
+    If Not CheckCellValid(cell_table, checkListObject:=True) Then Exit Sub
+    Set cell_dest = Application.InputBox("Select any cell in the key column of the destination worksheet.", Type:=8)
+    If Not CheckCellValid(cell_dest, checkListObject:=False) Then Exit Sub
+ 
+    ' Get source sheet object, table name and key column from source key cell
+    Dim col_key_src As Long: col_key_src = cell_table.Column
+    Dim table_name As String: table_name = cell_table.ListObject.Name
+    Dim sht_src As Worksheet
+    Set sht_src = cell_table.Parent
+   
+    ' Get destination sheet object, key column, output column from destination key cell
+    Dim col_key_dest As Long: col_key_dest = cell_dest.Column
+    Dim sht_dest As Worksheet
+    Set sht_dest = cell_dest.Parent
+    Dim col_output_start As Long: col_output_start = sht_dest.UsedRange.Columns.count + 1
+    Dim col_output As Long: col_output = col_output_start
+   
+    ' For each column of the output worksheet past the key column, add to destination worksheet
+    Dim i As Long: i = 1
+    Dim formula_string As String
+    Do While sht_src.Cells(row_header, i + col_key_src).Value <> ""
+   
+        ' Transfer header
+        sht_dest.Cells(row_header, col_output).Value = sht_src.Cells(row_header, i + col_key_src).Value
+       
+        ' Add formula to top row
+        formula_string = "=IFERROR(VLOOKUP(" & Replace(sht_dest.Cells(row_start, col_key_dest).Address, "$", "") & _
+                         "," & table_name & "," & i + 1 & ",FALSE), " & Chr(34) & iferror_value & Chr(34) & ")"
+        sht_dest.Cells(row_start, col_output).Formula = formula_string
+       
+        ' Iterate
+        i = i + 1
+        col_output = col_output + 1
+    Loop
+   
+    ' Get final row
+    Dim row_dest_stop As Long
+    row_dest_stop = sht_dest.UsedRange.Rows.count
+    If sht_dest.Cells(row_dest_stop, col_key_dest).Value = "" Then row_dest_stop = sht_dest.Cells(row_dest_stop, col_key_dest).End(xlUp).row
+   
+    ' Copy formulas down to bottom row of destination worksheet and select range (in case user wants to paste as values)
+    Dim rng_formulas_start As Range, rng_formulas_all As Range
+    Set rng_formulas_start = sht_dest.Range(Cells(row_start, col_output_start), Cells(row_start, col_output - 1))
+    Set rng_formulas_all = sht_dest.Range(Cells(row_start, col_output_start), Cells(row_dest_stop, col_output - 1))
+    rng_formulas_start.Copy rng_formulas_all
+    rng_formulas_all.Select
+   
+    Exit Sub
+   
+ErrHandler:
+    MsgBox ("An error occurred.")
+    Debug.Print Err.Number & ": " & Err.Description
+ 
+End Sub
+
+Function CheckCellValid(cell As Range, Optional checkListObject As Boolean = False) As Boolean
+' Checks that the specified range contains only one cell and that (if specified) the cell is in a table
+' If both criteria pass, returns True
+' If either criteria fails, displays appropriate error message and returns False
+   
+    ' Check only one cell
+    If cell.Cells.count <> 1 Then
+        MsgBox ("Error - please select only one cell.")
+        CheckCellValid = False
+        Exit Function
+    End If
+   
+    ' Check cell in list object (if specified)
+    If checkListObject Then
+        If Not CellInListObject(cell) Then
+            MsgBox ("Error - selected cell must be in a table.")
+            CheckCellValid = False
+            Exit Function
+        End If
+    End If
+   
+    CheckCellValid = True
+ 
+End Function
+ 
+Function CellInListObject(cell As Range) As Boolean
+' Returns True if the specified cell is in a ListObject, False if not
+ 
+On Error GoTo NotInListObject
+ 
+    If cell.ListObject.Name <> "" Then CellInListObject = True
+    Exit Function
+ 
+NotInListObject:
+    CellInListObject = False
+   
+End Function
+ 
+Sub AddIDColumn()
+' Calls AddIDColumn_Function to output values in a format that would allow numeric values to be added to a where clause (e.g. "123456, 234567, 345678")
+ 
+    Call AddIDColumn_Function("", ",")
+ 
+End Sub
+ 
+Sub AddIDColumn_TextKey()
+' Calls AddIDColumn_Function to output values in a format that would allow strings to be added to a where clause (e.g. "'123456', '234567', '345678'")
+ 
+    Call AddIDColumn_Function("'", "',")
+ 
+End Sub
+ 
+Function AddIDColumn_Function(Optional formula_prefix As String = "", Optional formula_suffix As String = "")
+' This procedure adds columns and VLOOKUP formulas to an output range to add data from a source table based on a key common to both
+' Useful when copying a column of keys into the WHERE clause (or other part) of a query
+' Two shells subs (AddIDColumn, AddIDColumn_TextKey) call this function to create a column that can be pasted into the where clause
+' of a query as numeric keys or strings respectively
+'    - User selects first cell of source column
+'    - User selects first cell of output column
+'    - Macro adds formulas to output column combining source column values with provided prefix and suffix
+'    - Macro highlights and copies range ready for pasting into another program (usually the WHERE clause of a SQL query)
+' On error, displays generic message and prints error details to immediate window
+ 
+    On Error GoTo ErrHandler
+ 
+    ' Get source and destination cells from user
+    Dim cell_src As Range, cell_dest As Range
+    Set cell_src = Application.InputBox("Select first source cell.", Type:=8)
+    Set cell_dest = Application.InputBox("Select first destination cell.", Type:=8)
+   
+    ' Set worksheet objects
+    Dim sht_src As Worksheet, sht_dest As Worksheet
+    Set sht_src = cell_src.Parent
+    Set sht_dest = cell_dest.Parent
+   
+    ' Get key rows/columns/ranges based on selected cells
+    Dim col_src As Long: col_src = cell_src.Column
+    Dim col_dest As Long: col_dest = cell_dest.Column
+    Dim row_start As Long: row_start = cell_src.row
+    Dim row_stop As Long: row_stop = sht_src.UsedRange.Rows.count
+    Dim rng_dest As Range
+    Set rng_dest = sht_dest.Range(sht_dest.Cells(row_start + 1, col_dest), sht_dest.Cells(row_stop, col_dest))
+   
+    ' Compile formula based on formula_prefix and formula_suffix parameters with source cell address
+    Dim formula_text As String: formula_text = ""
+    If formula_prefix <> "" Then formula_text = formula_text & " " & Chr(34) & formula_prefix & Chr(34) & " & "
+    If sht_src.Name <> sht_dest.Name Then formula_text = formula_text & "'" & sht_src.Name & "'!"
+    formula_text = formula_text & Replace(cell_src.Address, "$", "")
+    If formula_suffix <> "" Then formula_text = formula_text & " & " & Chr(34) & formula_suffix & Chr(34)
+    formula_text = "=IF(" & cell_src.Address & "<>" & Chr(34) & Chr(34) & "," & formula_text & "," & Chr(34) & Chr(34) & ")"
+    cell_dest.Formula = formula_text
+   
+    ' Copy formula down to bottom row
+    cell_dest.Copy rng_dest
+   
+    ' Select entire range for copying
+    sht_dest.Range(sht_dest.Cells(row_start, col_dest), sht_dest.Cells(row_stop, col_dest)).Copy
+   
+    Exit Function
+   
+ErrHandler:
+    MsgBox ("An error occurred.")
+    Debug.Print Err.Number & ": " & Err.Description
+    
+End Function
